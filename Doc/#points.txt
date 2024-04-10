@@ -1,0 +1,303 @@
+################## How to create a task?
+1. create ID (task handler)
+
+osThreadId myTask03Handle;
+
+2. create entry function
+
+void StartTask03(void const * argument);
+
+3. define Thread
+
+osThreadDef(myTask03, StartTask03, osPriorityBelowNormal, 0, 128);
+
+4. create Thread and assign ID to it
+
+myTask03Handle = osThreadCreate(osThread(myTask03), NULL);
+
+5. start kernel
+
+osKernelStart();
+
+6. task entry function
+
+void StartTask03(void const * argument)
+{
+  for(;;)
+  {
+	  task03_send();
+//	  osDelay(3000);
+	  osDelay(1000);
+  }
+}
+
+7. task while function
+
+void task03_send() {
+	uint8_t data[] = "This is a message from Task 3\r\n";
+	HAL_UART_Transmit(&huart1, data, sizeof(data) - 1, 500);
+}
+________________________________________
+################## How to create a task without cmsis.h and directly using freertos.h?
+1. create ID (task handler)
+
+TaskHandle_t HPTHandler;
+
+2. create entry function
+
+void HPT_Task_Start(void *pvParameters);
+
+3. define xTask
+
+xTaskCreate(HPTHandler, "HPT", 128, NULL, 3, &HPTHandler);
+
+4. start Scheduler
+
+vTaskStartScheduler();
+
+5. task entry function
+
+void HPT_Task_Start(void *pvParameters) {
+	ReleaseSemaphores2BeAcquired();
+	while(1) {
+		HPT_UART_Send();
+		vTaskDelay(3000);
+	}
+}
+
+6. task functions
+
+void ReleaseSemaphores2BeAcquired() {
+	// Release 3 semaphores so 3 task can acquire them
+	xSemaphoreGive(CountingSem);
+	xSemaphoreGive(CountingSem);
+	xSemaphoreGive(CountingSem);
+}
+
+void HPT_UART_Send() {
+	char sresource[3];
+	uint8_t data[150];
+	strcpy(data, "Entered HPT Task\n About to ACQUIRE the Semaphore\n\n");
+	HAL_UART_Transmit(&huart1, data, strlen(data), 500);
+
+	xSemaphoreTake(CountingSem, portMAX_DELAY);
+
+	itoa(resource[index], sresource, 10); // convert integer to char array
+	strcpy(data, "Leaving HPT Task\n Data ACCESSED is:: ");
+	strcat(data, sresource);
+	strcat(data, "\n Not releasing the Semaphore\n\n\n");
+	HAL_UART_Transmit(&huart1, data, strlen(data), 500);
+
+	index++;
+	if(index > 2)
+	  index = 0;
+
+}
+
+________________________________________
+################## How to create binary semaphore? cmsis.h
+1. osSemaphoreId BinSemHandle;
+2. osSemaphoreDef(BinSem);
+3. BinSemHandle = osSemaphoreCreate(osSemaphore(BinSem), 1);
+4. other operations
+	osSemaphoreWait(BinSemHandle, osWaitForever);
+	osSemaphoreRelease(BinSemHandle);
+________________________________________
+################## How to create binary semaphore? freertos.h
+1. SemaphoreHandle_t SimpleBinarySemaphoreHandler;
+2. SimpleBinarySemaphoreHandler = xSemaphoreCreateBinary();
+3. other operations
+	xSemaphoreTake(SimpleMutexHandler, portMAX_DELAY);
+	xSemaphoreGive(SimpleMutexHandler);
+________________________________________
+################## How to create counting semaphore?
+1. SemaphoreHandle_t CountingSem;
+2. int resource[3] = {111, 222, 333};
+3. CountingSem = xSemaphoreCreateCounting(3, 0);
+4. other operations
+	xSemaphoreGive(CountingSem);
+	xSemaphoreTake(CountingSem, portMAX_DELAY);
+	semcount = uxSemaphoreGetCount(CountingSem);
+	xSemaphoreGiveFromISR(CountingSem, &xHigherPriorityTaskWoken);
+________________________________________
+################## How to create mutex?
+1. SemaphoreHandle_t SimpleMutexHandler;
+2. SimpleMutexHandler = xSemaphoreCreateMutex();
+3. other operations
+	xSemaphoreTake(SimpleMutexHandler, portMAX_DELAY);
+	xSemaphoreGive(SimpleMutexHandler);
+________________________________________
+################## How to create queue?
+1. xQueueHandle SimpleQueue;
+2. SimpleQueue = xQueueCreate(5, sizeof(int));
+3. other operations
+	xQueueSend( xQueue, pvItemToQueue, xTicksToWait )
+	xQueueSendToFrontFromISR( xQueue, pvItemToQueue, pxHigherPriorityTaskWoken )
+	xQueueReceive( QueueHandle_t xQueue, void * const pvBuffer, TickType_t xTicksToWait )
+________________________________________
+################## cmsis.h Important Functions
+
+⚫ osStatus osThreadSuspend (osThreadId thread_id);
+⚫ osStatus osThreadResume (osThreadId thread_id);
+⚫ osStatus osThreadTerminate (osThreadId thread_id);
+⚫ osStatus osThreadYield (void);
+⚫ osStatus osThreadSuspendAll (void);
+⚫ osStatus osThreadResumeAll (void);
+⚫ osStatus osDelayUntil (uint32_t *PreviousWakeTime, uint32_t millisec);
+________________________________________
+################## Task Important Functions
+
+⚫ BaseType_t xTaskCreate(	TaskFunction_t pxTaskCode,
+							const char * const pcName,	/*lint !e971 Unqualified char types are allowed for strings and single characters only. */
+							const configSTACK_DEPTH_TYPE usStackDepth,
+							void * const pvParameters,
+							UBaseType_t uxPriority,
+							TaskHandle_t * const pxCreatedTask ) PRIVILEGED_FUNCTION
+	·xTaskCreate
+	
+⚫ void vTaskDelete( TaskHandle_t xTaskToDelete )
+	·Delete task	
+	
+⚫ taskYIELD() or portYIELD() or portEND_SWITCHING_ISR( xSwitchRequired )
+	·This function is used to request a context switch to another task. However, if there are no other tasks at a higher or equal priority to the task that calls this function, then the RTOS scheduler will simply select the task that called it to run again.	
+
+⚫ pdMS_TO_TICKS( xTimeInMs )
+	·Converts a time in milliseconds to a time in ticks.
+
+⚫ *pvPortMalloc( size_t xSize ) 
+	·Allocate Memory => safer version of malloc for freertos
+	
+⚫ void vPortFree( void *pv )
+	·Free allocated Memory
+
+________________________________________
+################## Semaphores
+
+⚫ Semaphores are used to synchronize tasks with other events in the system (especially IRQs)
+⚫ Waiting for semaphore is equal to wait() procedure, task is in blocked state not taking CPU time
+⚫ Semaphore should be created before usage
+⚫ In FreeRTOS implementation semaphores are based on queue mechanism
+⚫ In fact those are queues with length 1 and data size 0
+⚫ There are following types of semaphores in FreeRTOS:
+	·Binary - simple on/off mechanism
+	·Counting - counts multiple give and multiple take
+	·Mutex - Mutual Exclusion type semaphores (explained later on)
+	·Recursive (in CMSIS FreeRTOS used only for Mutexes)
+⚫ Turn on semaphore = give a semaphore can be done from other task or from interrupt subroutine (function os SemaphoreRelease() )
+⚫ Turn off semaphore = take a semaphore can be done from the task (function osSemaphoreWait() )
+________________________________________
+################## Semaphores Functions
+
+⚫ os SemaphoreId os SemaphoreCreate (const os SemaphoreDef_t *semaphore_def, int32_t count)
+	·Semaphore creation
+
+⚫ int32_t os SemaphoreWait (os SemaphoreId semaphore_id, uint32_t millisec)
+	·Wait for Semaphore release
+
+⚫ osStatus os SemaphoreRelease (os SemaphoreId semaphore_id)
+	·Semaphore release
+
+⚫ xSemaphoreCreateCounting( uxMaxCount, uxInitialCount )
+	·Create Counting Semaphore
+	
+⚫ xSemaphoreGive(semaphore)
+	·This function releases the semaphore
+	
+⚫ xSemaphoreGiveFromISR( xSemaphore, pxHigherPriorityTaskWoken )
+	·This function releases the semaphore in an ISR
+	
+⚫ xSemaphoreTake( xSemaphore, xBlockTime )
+	·This function acquires the semaphore
+	·xBlockTime is waiting time => for waiting forever => portMAX_DELAY
+	
+⚫ uxSemaphoreGetCount(semaphore)
+	·This function returns count of a semaphore (binary semaphore or counting semaphore)
+	
+⚫ taskYIELD() or portYIELD() or portEND_SWITCHING_ISR( xSwitchRequired )
+	·This function is used to request a context switch to another task. However, if there are no other tasks at a higher or equal priority to the task that calls this function, then the RTOS scheduler will simply select the task that called it to run again.
+
+⚫ uxQueueMessagesWaitingFromISR(semaphore)
+	·This function returns count of a semaphore in an ISR(binary semaphore or counting semaphore)
+
+⚫ xSemaphoreCreateMutex()	
+	·Create Mutex
+	
+⚫ xSemaphoreCreateBinary()	
+	·Create Binary Semaphore
+
+
+________________________________________
+################## S3 Counting Semaphores
+⚫ FreeRTOS is used in this project as RTOS Library.
+⚫ If it's not necessary don't regenerate the code from CUBE! If you need to regenerate then you should remove default generated parts of code (handles, functions and etc.) for CMSIS OS!
+⚫ In Binray Semaphores you can just release semaphore in the task which have acquired it!
+⚫ In Counting Semaphores you can release semaphore at any point of code!
+⚫ Releasing Semaphore from ISR is not straightforward by using a single function(Commit: "Counting Semaphores release with ISR:Part2")!	
+________________________________________
+################## Queue Functions
+⚫ xQueueCreate( uxQueueLength, uxItemSize )
+	·Create a queue. First Parameter is Queue length and second is sizeof each element. => SimpleQueue = xQueueCreate(5, sizeof(int));
+	
+⚫ xQueueSend( xQueue, pvItemToQueue, xTicksToWait )
+	·Send data into the Queue
+	
+⚫ xQueueSendToFrontFromISR( xQueue, pvItemToQueue, pxHigherPriorityTaskWoken )
+	·Send data into the Queue from ISR
+________________________________________
+################## Timers
+Types of Timers : 1. Periodic 2. Once
+Timers have priority between 0 and 6. Use 6 for biggest priority.
+
+
+Functions CMSIS.h:
+⚫ osTimerDef(name, function)
+	·Define a timer
+	
+⚫ osTimerId osTimerCreate (const osTimerDef_t *timer_def, os_timer_type type, void *argument)
+	·Create a timer
+
+⚫ osStatus osTimerStart (osTimerId timer_id, uint32_t millisec)
+	·Start a software timer
+	
+
+Functions FreeRTOS.h:
+
+⚫ TimerHandle_t xTimerCreate(	const char * const pcTimerName,			/*lint !e971 Unqualified char types are allowed for strings and single characters only. */
+								const TickType_t xTimerPeriodInTicks,
+								const UBaseType_t uxAutoReload,
+								void * const pvTimerID,
+								TimerCallbackFunction_t pxCallbackFunction )
+	·Create a timer
+	·Example: xTimerCreate("timer1", 1000, pdTRUE, (void *) 1, Timer_Callback);
+									
+⚫ xTimerStart( xTimer, xTicksToWait )
+	·Start a software timer
+
+⚫ xTimerStop( xTimer, xTicksToWait )
+	·Stop a software timer
+	
+⚫ xTimerReset( xTimer, xTicksToWait )
+	·Restart a software timer
+	
+⚫ xTimerDelete( xTimer, xTicksToWait )
+	·Delete a software timer
+
+⚫ xTimerChangePeriod( xTimer, xNewPeriod, xTicksToWait )
+	·Change Timer Period
+________________________________________
+################## Other Points
+
+1. We should describe tasks with different priorities when using same resource => RTOS_S0
+for example if we have 3 threads and all of them want to send data via UART1 every 1 second, we should describe and initilize them with different priorities.
+
+2. vTaskDelayUntil is enabled in => RTOS_S1
+vTaskDelayUntil Parameter Description: It is one of the macros allowing those components of the real time kernel not utilized by your application to be excluded from your build. - this ensures the RTOS does not use any more ROM or RAM than necessary for your particular embedded application. To include the vTaskDelayUntil() API function, set vTaskDelayUntil to 1 (Enabled).
+
+3. Priority Inversion : when a lower priority task preempt a higher priotrity task it's called priority inversion => RTOS_S2
+
+4. USE_COUNTING_SEMAPHORES is enabled in => RTOS_S3
+USE_COUNTING_SEMAPHORES Parameter Description: Set to 1 to include counting semaphore functionality in the build, or 0 to omit counting semaphore functionality from the build.
+
+5. Priority Inheritance : when a lower priority task inherits the priority of the highest task it's called priority inheritance => RTOS_S6
+
+6. Mutex vs Binary Semaphore => Mutex uses priority inheritance while binary semaphore uses priority inversion.

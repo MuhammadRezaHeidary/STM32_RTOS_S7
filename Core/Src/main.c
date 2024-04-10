@@ -18,12 +18,21 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
 #include "string.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
+#include "timers.h"
+#include "queue.h"
+#include "semphr.h"
+#include "event_groups.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,10 +54,25 @@
 I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
-
+/*
+ * ***************************************************
+osThreadId USB_TaskHandle;
+osThreadId LED_TaskHandle;
+osTimerId PeriodicTimerHandle;
+osTimerId OnceTimerHandle;
+ * ***************************************************
+*/
 /* USER CODE BEGIN PV */
 int count = 0;
 uint8_t USB_RX_Buffer[64];
+
+// Timer Handles
+xTimerHandle PTHandle;
+xTimerHandle OTHandle;
+
+// Task Handles
+xTaskHandle USB_Handle;
+xTaskHandle LED_Handle;
 
 /* USER CODE END PV */
 
@@ -57,7 +81,51 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
+//void Start_USB_Task(void const * argument);
+//void Start_LED_Task(void const * argument);
+//void PT_Callback(void const * argument);
+//void OT_Callback(void const * argument);
 /* USER CODE BEGIN PFP */
+
+
+void Start_USB_Task(void * argument)
+{
+  MX_USB_DEVICE_Init();
+  xTimerStart(PTHandle, 0);
+  while(1)
+  {
+	  uint8_t data[50];
+	  sprintf((char *) data, "Counter = %d\r\n", count);
+	  CDC_Transmit_FS((uint8_t *) data, strlen((char *)data));
+	  count++;
+	  vTaskDelay(pdMS_TO_TICKS(2000));
+  }
+}
+
+void Start_LED_Task(void * argument)
+{
+	while(1) {
+		if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) {
+			HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET);
+			xTimerStart(OTHandle, 0);
+		}
+		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+}
+
+void Timer_Callback(xTimerHandle xtimer) {
+	if(xtimer == OTHandle) {
+		HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
+	}
+	else if(xtimer == PTHandle) {
+		uint8_t data[50];
+		sprintf((char *) data, "Periodic Timer\r\n");
+		CDC_Transmit_FS((uint8_t *) data, strlen((char *)data));
+		HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin);
+	}
+
+}
 
 /* USER CODE END PFP */
 
@@ -96,12 +164,76 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
-  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
+
+  // Create Timers
+  PTHandle = xTimerCreate("PT_timer1", pdMS_TO_TICKS(1000), pdTRUE, (void *) 1, Timer_Callback);
+  OTHandle = xTimerCreate("OT_timer2", pdMS_TO_TICKS(4000), pdFALSE, (void *) 2, Timer_Callback);
+
+  // Create Tasks
+  xTaskCreate(Start_USB_Task, "USB", 128, NULL, 1, &USB_Handle);
+  xTaskCreate(Start_LED_Task, "LED", 128, NULL, 1, &LED_Handle);
+
+  // Start Scheduler
+  vTaskStartScheduler();
 
 
   /* USER CODE END 2 */
 
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* Create the timer(s) */
+  /* definition and creation of PeriodicTimer */
+
+/*
+ * ***************************************************
+  osTimerDef(PeriodicTimer, PT_Callback);
+  PeriodicTimerHandle = osTimerCreate(osTimer(PeriodicTimer), osTimerPeriodic, NULL);
+
+   definition and creation of OnceTimer
+  osTimerDef(OnceTimer, OT_Callback);
+  OnceTimerHandle = osTimerCreate(osTimer(OnceTimer), osTimerOnce, NULL);
+ * ***************************************************
+*/
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of USB_Task */
+/*
+ * ***************************************************
+  osThreadDef(USB_Task, Start_USB_Task, osPriorityNormal, 0, 128);
+  USB_TaskHandle = osThreadCreate(osThread(USB_Task), NULL);
+
+   definition and creation of LED_Task
+  osThreadDef(LED_Task, Start_LED_Task, osPriorityNormal, 0, 128);
+  LED_TaskHandle = osThreadCreate(osThread(LED_Task), NULL);
+
+ * ***************************************************
+  */
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* Start scheduler */
+/*
+ * ***************************************************
+  osKernelStart();
+ * ***************************************************
+ */
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -109,11 +241,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  uint8_t data[100];
-	  sprintf((char *) data, "Counter = %d\r\n", count);
-	  CDC_Transmit_FS((uint8_t *) data, strlen((char *)data));
-	  count++;
-	  HAL_Delay(2000);
+
   }
   /* USER CODE END 3 */
 }
@@ -309,6 +437,79 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_Start_USB_Task */
+/**
+  * @brief  Function implementing the USB_Task thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_Start_USB_Task */
+
+//void Start_USB_Task(void const * argument)
+//{
+//  /* init code for USB_DEVICE */
+//  MX_USB_DEVICE_Init();
+//  /* USER CODE BEGIN 5 */
+//  osTimerStart(PeriodicTimerHandle, 1000);
+//  /* Infinite loop */
+//  for(;;)
+//  {
+//	  uint8_t data[100];
+//	  sprintf((char *) data, "Counter = %d\r\n", count);
+//	  CDC_Transmit_FS((uint8_t *) data, strlen((char *)data));
+//	  count++;
+//	  osDelay(2000);
+//  }
+//  /* USER CODE END 5 */
+//}
+//
+//
+//
+///* USER CODE BEGIN Header_Start_LED_Task */
+///**
+//* @brief Function implementing the LED_Task thread.
+//* @param argument: Not used
+//* @retval None
+//*/
+///* USER CODE END Header_Start_LED_Task */
+//void Start_LED_Task(void const * argument)
+//{
+//  /* USER CODE BEGIN Start_LED_Task */
+//  /* Infinite loop */
+//  for(;;)
+//  {
+//	if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) {
+//		HAL_GPIO_WritePin(LD8_GPIO_Port, LD8_Pin, GPIO_PIN_SET);
+//		osTimerStart(OnceTimerHandle, 4000);
+//	}
+//    osDelay(20);
+//  }
+//  /* USER CODE END Start_LED_Task */
+//}
+//
+///* PT_Callback function */
+//void PT_Callback(void const * argument)
+//{
+//  /* USER CODE BEGIN PT_Callback */
+//	  uint8_t data[100];
+//	  sprintf((char *) data, "Periodic Timer\r\n");
+//	  CDC_Transmit_FS((uint8_t *) data, strlen((char *)data));
+//  /* USER CODE END PT_Callback */
+//}
+//
+///* OT_Callback function */
+//void OT_Callback(void const * argument)
+//{
+//  /* USER CODE BEGIN OT_Callback */
+//	HAL_GPIO_WritePin(LD8_GPIO_Port, LD8_Pin, GPIO_PIN_RESET);
+//
+//
+//  /* USER CODE END OT_Callback */
+//}
+
+
+
 
 /**
   * @brief  Period elapsed callback in non blocking mode
